@@ -65,28 +65,51 @@ Fixpoint rotate {X} n (xs:list X) :=
     | S m,x::xr => rotate m (xr++[x])
     end.
 
+Definition offset r := 
+    match r with
+    |  0 =>  0
+    |  1 =>  0
+    |  2 =>  1
+    |  3 =>  2
+    |  4 =>  3
+    |  5 =>  4
+    |  6 =>  6
+    |  7 =>  9
+    |  8 => 11
+    |  9 => 15
+    | 10 => 18
+    | 11 => 22
+    | 12 => 27
+    | 13 => 32
+    | 14 => 37
+    | _ => 0
+    end.
+
+Definition extra r := 
+        match r with
+        |  0 => []
+        |  1 => [1]
+        |  2 => [2]
+        |  3 => [3]
+        |  4 => [4]
+        |  5 => [3;2]
+        |  6 => [1;2;3]
+        |  7 => [4;3]
+        |  8 => [2;1;2;3]
+        |  9 => [4;3;2]
+        | 10 => [1;2;3;4]
+        | 11 => [3;2;1;2;3]
+        | 12 => [4;3;2;1;2]
+        | 13 => [3;4;3;2;1]
+        | 14 => [2;3;4;3;2]
+        | _ => []
+    end.
 
 Definition qrseq (q:nat) (r:nat) : (list nat) * (list nat) :=
-    let offset_period n :=
-        concat(repeat (rotate n period) q) in
-        match r with
-        |  0 => (offset_period  0,          [])
-        |  1 => (offset_period  0,         [1])
-        |  2 => (offset_period  1,         [2])
-        |  3 => (offset_period  2,         [3])
-        |  4 => (offset_period  3,         [4])
-        |  5 => (offset_period  4,       [3;2])
-        |  6 => (offset_period  6,     [1;2;3])
-        |  7 => (offset_period  9,       [4;3])
-        |  8 => (offset_period 11,   [2;1;2;3])
-        |  9 => (offset_period 15,     [4;3;2])
-        | 10 => (offset_period 18,   [1;2;3;4])
-        | 11 => (offset_period 22, [3;2;1;2;3])
-        | 12 => (offset_period 27, [4;3;2;1;2])
-        | 13 => (offset_period 32, [3;4;3;2;1])
-        | 14 => (offset_period 37, [2;3;4;3;2])
-        | _ => ([],[])
-    end.
+        (
+            concat(repeat (rotate (offset r) period) q),
+            extra r
+        ).
 
 Lemma rotate_sum n xs:
     sum (rotate n xs) = sum xs.
@@ -287,7 +310,225 @@ Proof.
     assumption.
 Qed.
 
+Ltac solve_eqst_const :=
+    match goal with
+    | |- EqSt (Cons ?A ?B) (Cons ?C ?D) =>
+            constructor;[auto|cbn [tl]]
+    | _ => fail
+    end.
 
+Lemma prependPeriodSeq:
+    prependListStream period seq = seq.
+Proof.
+    setoid_rewrite (unfold_Stream seq) at 2.
+    now cbn.
+Qed.
+
+Lemma seq_eq_k n k:
+    k < 15 ->
+    n mod 15 = k ->
+    EqSt (concat_list n_to_seq (S n)) (prependListStream (drop (offset (S k) mod length period) period) seq) ->
+    EqSt (concat_list n_to_seq n) (prependListStream (drop (offset k mod length period) period) seq).
+Proof.
+    intros Hk Hr IH.
+    rewrite (unfold_Stream (concat_list _ _)).
+    cbn [concat_list].
+    unfold n_to_seq.
+    rewrite Hr.
+    cbn [qrseq].
+    (* cbn offset period *)
+    remember (_ / 15) as q.
+    pose proof prependPeriodSeq as HP.
+    cbn in HP.
+    destruct q.
+    - cbn [repeat concat app].
+
+      do 15 try destruct k as [|k].
+      all:
+      try(
+        cbn [offset extra skipn length period];
+        vm_compute (_ mod 6);
+        cbn [drop period];
+        cbn [prependListStream];
+
+        rewrite (unfold_Stream seq);cbn [seq];
+        cbn [prependListStream period];
+        first [
+            rewrite <- unfold_Stream | 
+            (cbn [prependListStream period];
+            repeat solve_eqst_const)
+        ];
+
+        cbn [length period offset] in IH;
+        vm_compute (_ mod 6) in IH;
+        cbn [period drop offset] in IH;
+        repeat rewrite prependPeriodSeq in IH;
+        repeat rewrite HP in IH;
+        repeat rewrite prependPeriodSeq;
+        repeat rewrite HP;
+        apply IH
+        ).
+    - rewrite repeat_rotate.
+
+      do 15 try destruct k as [|k].
+
+      all: 
+        cbn [offset extra skipn length period];
+        vm_compute (_ mod 6);
+        cbn [drop period];
+            repeat rewrite prepend_app;
+        cbn [prependListStream];
+
+        rewrite (unfold_Stream seq);cbn [seq];
+        cbn [prependListStream period];
+        first [
+            rewrite <- unfold_Stream | 
+            (cbn [prependListStream period];
+            repeat solve_eqst_const)
+        ];
+
+
+        cbn [length period offset] in IH;
+        vm_compute (_ mod 6) in IH;
+        cbn [period drop offset] in IH;
+        repeat rewrite prependPeriodSeq in IH;
+        repeat rewrite HP in IH;
+        repeat rewrite prependPeriodSeq;
+        repeat rewrite HP;
+
+            apply prependRepeatPeriod;
+            cbn [take period];
+
+            rewrite (unfold_Stream seq);cbn [seq];
+            rewrite (unfold_Stream seq);cbn [seq];
+            cbn [prependListStream period];
+            first [
+                rewrite <- unfold_Stream | 
+                (cbn [prependListStream period];
+                repeat solve_eqst_const)
+            ];
+
+            repeat rewrite prependPeriodSeq in IH;
+            repeat rewrite HP in IH;
+            repeat rewrite prependPeriodSeq;
+            repeat rewrite HP;
+            apply IH.
+Qed.
+
+        (* all: try apply IH.
+      + 
+      + cbn [offset extra skipn length period].
+        vm_compute (_ mod 6).
+        cbn [drop period].
+            repeat rewrite prepend_app.
+        cbn [prependListStream].
+
+        rewrite (unfold_Stream seq);cbn [seq].
+        cbn [prependListStream period].
+        first [
+            rewrite <- unfold_Stream | 
+            (cbn [prependListStream period];
+            repeat solve_eqst_const)
+        ].
+
+
+        cbn [length period offset] in IH.
+        vm_compute (_ mod 6) in IH.
+        cbn [period drop offset] in IH.
+        repeat rewrite prependPeriodSeq in IH.
+        repeat rewrite HP in IH.
+        repeat rewrite prependPeriodSeq.
+        repeat rewrite HP.
+
+            apply prependRepeatPeriod.
+            cbn [take period].
+
+            rewrite (unfold_Stream seq);cbn [seq].
+            cbn [prependListStream period].
+            first [
+                rewrite <- unfold_Stream | 
+                (cbn [prependListStream period];
+                repeat solve_eqst_const)
+            ].
+
+        apply IH.
+
+
+      all:
+      try(
+        cbn [offset extra skipn length period];
+        vm_compute (_ mod 6);
+        cbn [drop period];
+        cbn [prependListStream];
+
+        rewrite (unfold_Stream seq);cbn [seq];
+        cbn [prependListStream period];
+        first [
+            rewrite <- unfold_Stream | 
+            (cbn [prependListStream period];
+            repeat solve_eqst_const)
+        ];
+
+        cbn [length period offset] in IH;
+        vm_compute (_ mod 6) in IH;
+        cbn [period drop offset] in IH;
+        repeat rewrite prependPeriodSeq in IH;
+        repeat rewrite HP in IH;
+        repeat rewrite prependPeriodSeq;
+        repeat rewrite HP 
+        (* apply IH *)
+        ).
+    all: try apply IH.
+    
+    
+
+
+
+    
+    rewrite repeat_rotate.
+      (* Locate "_ mod _". *)
+      replace (1 mod length period) with (1) by auto.
+      cbn [drop length period take].
+      do 3 rewrite prepend_app.
+      cbn [prependListStream].
+      do 5 (constructor;[reflexivity|]);cbn [tl].
+      apply prependRepeatPeriod.
+      rewrite (unfold_Stream seq).
+      cbn [seq].
+      do 2 (constructor;[reflexivity|]);cbn [tl]. *)
+
+(* Lemma seq_eq n k:
+    k = 2 ->
+    n mod 15 = k ->
+    EqSt (concat_list n_to_seq n) (prependListStream (skipn (offset k) period) seq).
+Proof.
+    intros ->.
+    rewrite (unfold_Stream (concat_list _ _)).
+    intros Hr.
+    (* assert((S n) mod 15 = 2) as Hr by (apply (Hmod 1);lia). *)
+    cbn [offset extra].
+    cbn [concat_list].
+    unfold n_to_seq.
+    rewrite Hr.
+    cbn [qrseq].
+    remember (_ / 15) as q.
+    destruct q.
+    - cbn [repeat concat app].
+
+      cbn [prependListStream].
+      constructor;[auto|cbn [tl]].
+      admit.
+    - rewrite repeat_rotate.
+      (* Locate "_ mod _". *)
+      replace (1 mod length period) with (1) by auto.
+      cbn [drop length period take].
+      do 3 rewrite prepend_app.
+      cbn [prependListStream].
+      do 5 (constructor;[reflexivity|]);cbn [tl].
+      apply prependRepeatPeriod.
+      rewrite (unfold_Stream seq).
+      cbn [seq].
+      do 2 (constructor;[reflexivity|]);cbn [tl]. *)
 
 (* Lemma seq_eq n:
     n mod 15 = 2 ->
@@ -320,6 +561,8 @@ Proof.
       do 2 (constructor;[reflexivity|]);cbn [tl]. *)
 
 
+Unset Guard Checking.
+
 Lemma seq_eq n:
     n mod 15 = 1 ->
     EqSt (concat_list n_to_seq n) seq.
@@ -330,7 +573,85 @@ Proof.
 
     assert(15<>0) as H0 by lia.
     pose proof (@local_mod_add n 15 1 H0 Hn) as Hmod.
-    clear H0.
+
+    pose proof (@seq_eq_k n 1) as Hk.
+    (* vm_compute (_ mod (length period)) in Hk. *)
+    rewrite prependPeriodSeq in Hk.
+    apply Hk;[lia|auto|].
+    clear Hk.
+
+    do 13 (apply seq_eq_k;[lia|shelve|]).
+    Unshelve.
+    shelve.
+    - apply (Hmod 1);lia.
+    - apply (Hmod 2);lia.
+    - apply (Hmod 3);lia.
+    - apply (Hmod 4);lia.
+    - apply (Hmod 5);lia.
+    - apply (Hmod 6);lia.
+    - apply (Hmod 7);lia.
+    - apply (Hmod 8);lia.
+    - apply (Hmod 9);lia.
+    - apply (Hmod 10);lia.
+    - apply (Hmod 11);lia.
+    - apply (Hmod 12);lia.
+    - apply (Hmod 13);lia.
+    Unshelve.
+
+    match goal with 
+    | [ |- context G[concat_list _ ?N] ] =>
+    replace N with (14+n) by reflexivity
+    end.
+    remember (14+n) as m.
+    vm_compute (_ mod _).
+    cbn [drop].
+    rewrite prependPeriodSeq.
+
+    (* rewrite (unfold_Stream (concat_list _ _)).
+    cbn [concat_list].
+    unfold n_to_seq.
+    replace (m mod 15) with 0 by admit.
+    cbn [qrseq offset extra].
+    rewrite app_nil_r. *)
+    
+    pose proof (@seq_eq_k m 0) as Hk.
+    (* vm_compute (_ mod (length period)) in Hk. *)
+    rewrite prependPeriodSeq in Hk.
+    apply Hk;[lia| | ].
+    1: {
+      subst.
+      rewrite (add_mod _ _ _ H0) Hn.
+      setoid_rewrite mod_small at 2;[|lia].
+      now rewrite (mod_same _ H0).
+    }
+    clear Hk.
+
+    apply CIH.
+    subst.
+    replace (S (14+n)) with (15+n) by lia.
+    now rewrite (add_mod _ _ _ H0) (mod_same _ H0) (mod_mod _ _ H0);cbn [add].
+Qed.
+
+
+    (* pose proof (@seq_eq_k (S n) 2) as Hk.
+    vm_compute (_ mod (length period)) in Hk.
+    apply Hk;[lia|shelve|].
+    clear Hk.
+
+    pose proof (@seq_eq_k (2+n) 3) as Hk.
+    (* vm_compute (_ mod (length period)) in Hk. *)
+    apply Hk;[lia|shelve|].
+    clear Hk.
+
+    apply seq_eq_k.
+    pose proof (@seq_eq_k (3+n) 4) as Hk.
+    vm_compute (_ mod (length period)) in Hk.
+    apply Hk;[lia|shelve|].
+    clear Hk.
+
+
+
+    
 
     (* 0 *)
 
@@ -378,10 +699,13 @@ Proof.
       do 2 (constructor;[reflexivity|]);cbn [tl].
       
 
-Qed.
+Qed. *)
 
-Goal EqSt (concat_list n_to_stream 1) seq.
+Goal EqSt (concat_list n_to_seq 1) seq.
 Proof.
+    apply seq_eq.
+    rewrite mod_small;lia.
+Qed.
 (* rewrite (unfold_Stream seq). *)
 (* do 15 rewrite (unfold_Stream (concat_list _ _)). *)
-rewrite (unfold_Stream (concat_list _ _)).
+(* rewrite (unfold_Stream (concat_list _ _)). *)
