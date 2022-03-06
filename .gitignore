@@ -2,3 +2,4 @@
 *.aux
 *.vo*
 *.cache
+.vscode
