@@ -11,11 +11,35 @@ Require Import Lists.Streams.
 Set Implicit Arguments.
 
 
+(** Auxiliary definitions **)
+
 Fixpoint prependListStream {A} (xs:list A) ys :=
     match xs with
     | [] => ys
     | x::xr => Cons x (prependListStream xr ys)
     end.
+
+Definition sum := fold_right add 0.
+
+Fixpoint rotate {X} n (xs:list X) :=
+    match n,xs with
+    | _,[] => xs
+    | 0,_ => xs
+    | S m,x::xr => rotate m (xr++[x])
+    end.
+
+Notation take := firstn.
+Notation drop := skipn.
+Definition rotate2 {A} (n : nat) (l : list A) : list A :=
+  drop (n mod length l) l ++ take (n mod length l) l.
+
+
+
+
+
+
+
+(** Main definitions **)
 
 Unset Guard Checking.
 
@@ -27,41 +51,11 @@ CoFixpoint concat_list {A} (f:nat -> list A) n :=
 
 Set Guard Checking.
 
-
 Definition period := [1;2;3;4;3;2].
 
 CoFixpoint seq := prependListStream period seq.
 CoFixpoint seq2 := Cons 1 (Cons 2 (Cons 3 (Cons 4 (Cons 3 (Cons 2 seq2))))).
 
-Goal EqSt seq seq2.
-Proof.
-    cofix CIH.
-    do 6 constructor;trivial.
-Qed.
-
-Definition sum := fold_right add 0.
-
-Lemma sum_app xs ys:
-    sum (xs ++ ys) = sum xs + sum ys.
-Proof.
-    induction xs;cbn;trivial.
-    rewrite IHxs;lia.
-Qed.
-
-Lemma repeat_sum xs n :
-    sum (concat (repeat xs n)) = n * sum xs.
-Proof.
-    induction n;cbn.
-    - reflexivity.
-    - now rewrite sum_app IHn.
-Qed.
-
-Fixpoint rotate {X} n (xs:list X) :=
-    match n,xs with
-    | _,[] => xs
-    | 0,_ => xs
-    | S m,x::xr => rotate m (xr++[x])
-    end.
 
 Definition offset r := 
     match r with
@@ -109,24 +103,55 @@ Definition qrseq (q:nat) (r:nat) : (list nat) * (list nat) :=
             extra r
         ).
 
+Definition n_to_seq (n:nat) :=
+    let (qseq,rseq) := qrseq (n/15) (n mod 15) in
+    qseq ++ rseq.
+
+Ltac solve_eqst_const :=
+    match goal with
+    | |- EqSt (Cons ?A ?B) (Cons ?C ?D) =>
+            constructor;[auto|cbn [tl]]
+    | _ => fail
+    end.
+
+
+
+
+
+
+
+
+
+
+
+(** Auxiliary proofs **)
+
+Goal EqSt seq seq2.
+Proof.
+    cofix CIH.
+    do 6 constructor;trivial.
+Qed.
+
+Lemma sum_app xs ys:
+    sum (xs ++ ys) = sum xs + sum ys.
+Proof.
+    induction xs;cbn;trivial.
+    rewrite IHxs;lia.
+Qed.
+
+Lemma repeat_sum xs n :
+    sum (concat (repeat xs n)) = n * sum xs.
+Proof.
+    induction n;cbn.
+    - reflexivity.
+    - now rewrite sum_app IHn.
+Qed.
+
 Lemma rotate_sum n xs:
     sum (rotate n xs) = sum xs.
 Proof.
     induction n in xs |- *;destruct xs;trivial.
     rewrite IHn sum_app;cbn;lia.
-Qed.
-
-Lemma qrseq_spec q r (Hr:r<15):
-    let (ps,rs) := qrseq q r in
-    sum ps = 15 * q /\
-    sum rs = r.
-Proof.
-    destruct qrseq as [ps rs] eqn:H.
-    revert H.
-    do 15 try (destruct r as [|r]).
-    16: lia.
-    all: cbn;injection 1 as <- <-.
-    all: rewrite repeat_sum;cbn;split;lia.
 Qed.
 
 Lemma app_not_nil_r {X} (xs:list X) ys:
@@ -136,52 +161,6 @@ Proof.
     - trivial.
     - intros _. cbn. congruence.
 Qed.
-
-Definition n_to_seq (n:nat) :=
-    let (qseq,rseq) := qrseq (n/15) (n mod 15) in
-    qseq ++ rseq.
-
-Definition n_to_seq_spec (n:nat) : 
-    n>0 ->
-    let xs := n_to_seq n in
-    sum xs = n /\ xs <> nil.
-Proof.
-    intros H0.
-    assert(15 <> 0) as H15 by lia.
-    pose proof(Nat.div_mod n 15 H15) as Hn.
-    pose proof(Nat.mod_upper_bound n 15 H15) as Hr.
-    unfold n_to_seq.
-    remember (n/15) as q.
-    remember (n mod 15) as r.
-    pose proof(@qrseq_spec q r Hr) as H.
-    destruct (@qrseq q r) as [qseq rseq] eqn: Hseq.
-    destruct H as [Hqseq Hrseq].
-    split.
-    - now rewrite sum_app Hqseq Hrseq Hn.
-    - destruct n;[lia|].
-      do 15 try (destruct r as [|r]).
-      16: lia.
-      all: cbn in Hseq;injection Hseq as <- <-.
-      2-15: now apply app_not_nil_r.
-      assert(q>0) by lia.
-      destruct q;[lia|].
-      cbn;congruence.
-Defined.
-
-Lemma prependPeriod s:
-EqSt s seq ->
-EqSt (prependListStream period s) seq.
-Proof.
-    intros H.
-    rewrite (unfold_Stream seq).
-    do 6 constructor;[reflexivity|].
-    apply H.
-Qed.
-
-Notation take := firstn.
-Notation drop := skipn.
-Definition rotate2 {A} (n : nat) (l : list A) : list A :=
-  drop (n mod length l) l ++ take (n mod length l) l.
 
 (* Admitted but we could simply replace rotate with rotate2 *)
 Lemma full_rotate {X} (xs:list X) :
@@ -265,20 +244,6 @@ Proof.
     - now rewrite IHxs.
 Qed.
 
-
-Lemma prependRepeatPeriod n s:
-EqSt s seq ->
-EqSt (prependListStream (concat (repeat period n)) s) seq.
-Proof.
-    intros H.
-    induction n.
-    - apply H.
-    - cbn [repeat concat].
-        rewrite prepend_app.
-        apply prependPeriod, IHn.
-Qed.
-
-
 Lemma local_mod_add n m c:
     m <> 0 ->
     n mod m = c ->
@@ -294,12 +259,77 @@ Proof.
     assumption.
 Qed.
 
-Ltac solve_eqst_const :=
-    match goal with
-    | |- EqSt (Cons ?A ?B) (Cons ?C ?D) =>
-            constructor;[auto|cbn [tl]]
-    | _ => fail
-    end.
+
+
+
+
+
+
+
+
+(** Main proofs **)
+
+Lemma qrseq_spec q r (Hr:r<15):
+    let (ps,rs) := qrseq q r in
+    sum ps = 15 * q /\
+    sum rs = r.
+Proof.
+    destruct qrseq as [ps rs] eqn:H.
+    revert H.
+    do 15 try (destruct r as [|r]).
+    16: lia.
+    all: cbn;injection 1 as <- <-.
+    all: rewrite repeat_sum;cbn;split;lia.
+Qed.
+
+Definition n_to_seq_spec (n:nat) : 
+    n>0 ->
+    let xs := n_to_seq n in
+    sum xs = n /\ xs <> nil.
+Proof.
+    intros H0.
+    assert(15 <> 0) as H15 by lia.
+    pose proof(Nat.div_mod n 15 H15) as Hn.
+    pose proof(Nat.mod_upper_bound n 15 H15) as Hr.
+    unfold n_to_seq.
+    remember (n/15) as q.
+    remember (n mod 15) as r.
+    pose proof(@qrseq_spec q r Hr) as H.
+    destruct (@qrseq q r) as [qseq rseq] eqn: Hseq.
+    destruct H as [Hqseq Hrseq].
+    split.
+    - now rewrite sum_app Hqseq Hrseq Hn.
+    - destruct n;[lia|].
+      do 15 try (destruct r as [|r]).
+      16: lia.
+      all: cbn in Hseq;injection Hseq as <- <-.
+      2-15: now apply app_not_nil_r.
+      assert(q>0) by lia.
+      destruct q;[lia|].
+      cbn;congruence.
+Defined.
+
+Lemma prependPeriod s:
+EqSt s seq ->
+EqSt (prependListStream period s) seq.
+Proof.
+    intros H.
+    rewrite (unfold_Stream seq).
+    do 6 constructor;[reflexivity|].
+    apply H.
+Qed.
+
+Lemma prependRepeatPeriod n s:
+EqSt s seq ->
+EqSt (prependListStream (concat (repeat period n)) s) seq.
+Proof.
+    intros H.
+    induction n.
+    - apply H.
+    - cbn [repeat concat].
+        rewrite prepend_app.
+        apply prependPeriod, IHn.
+Qed.
 
 Lemma prependPeriodSeq:
     prependListStream period seq = seq.
