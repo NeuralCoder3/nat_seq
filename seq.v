@@ -8,6 +8,8 @@ Import ListNotations.
 
 Require Import Lists.Streams.
 
+Load util.
+
 (** Auxiliary definitions **)
 
 Fixpoint prependListStream {A} (xs:list A) ys :=
@@ -15,20 +17,6 @@ Fixpoint prependListStream {A} (xs:list A) ys :=
   | [] => ys
   | x::xr => Cons x (prependListStream xr ys)
   end.
-
-Definition sum := fold_right add 0.
-
-Fixpoint rotate {X} n (xs:list X) :=
-  match n,xs with
-  | _,[] => xs
-  | 0,_ => xs
-  | S m,x::xr => rotate m (xr++[x])
-  end.
-
-Notation take := firstn.
-Notation drop := skipn.
-Definition rotate2 {A} (n : nat) (l : list A) : list A :=
-  drop (n mod length l) l ++ take (n mod length l) l.
 
 Inductive ne_list (A:Type) : Type :=
 | ne_single (a:A)
@@ -146,109 +134,6 @@ Proof.
   do 6 constructor;trivial.
 Qed.
 
-Lemma sum_app xs ys:
-  sum (xs ++ ys) = sum xs + sum ys.
-Proof.
-  induction xs;cbn;trivial.
-  rewrite IHxs;lia.
-Qed.
-
-Lemma repeat_sum xs n :
-  sum (concat (repeat xs n)) = n * sum xs.
-Proof.
-  induction n;cbn.
-  - reflexivity.
-  - now rewrite sum_app IHn.
-Qed.
-
-Lemma rotate_sum n xs:
-  sum (rotate n xs) = sum xs.
-Proof.
-  induction n in xs |- *;destruct xs;trivial.
-  rewrite IHn sum_app;cbn;lia.
-Qed.
-
-Lemma app_not_nil_r {X} (xs:list X) ys:
-  ys <> [] -> xs++ys <> [].
-Proof.
-  destruct xs.
-  - trivial.
-  - intros _. cbn. congruence.
-Qed.
-
-(* Admitted but we could simply replace rotate with rotate2 *)
-Lemma full_rotate {X} (xs:list X) :
-  rotate (length xs) xs = xs.
-Proof.
-  induction xs;cbn.
-  - reflexivity.
-  -
-Admitted.
-
-Lemma rotate_mod {X} n (xs:list X):
-  rotate n xs = rotate (n mod length xs) xs.
-Proof.
-  destruct xs.
-  - now destruct n;cbn.
-  - remember (x::xs) as ys.
-    assert(length ys <> 0) as H0 by (subst;cbn;lia).
-    pose proof (div_mod n (length ys) H0).
-    remember (n/length ys) as q.
-    induction q.
-    + f_equal. lia.
-    + 
-Admitted.
-
-Lemma rotate_alt {X} n (xs:list X):
-  rotate n xs = rotate2 n xs.
-Proof.
-  induction n in xs |- *;cbn.
-  - destruct xs;cbn;trivial.
-    rewrite sub_diag. cbn.
-    now rewrite app_nil_r.
-  - destruct xs;trivial.  
-    rewrite IHn.
-    unfold rotate2.
-    rewrite app_length.
-    cbn [length].
-    rewrite add_1_r.
-    f_equal.
-    + admit.
-    + admit.
-Restart.
-  unfold rotate2.
-  rewrite rotate_mod.
-  (* remember (n mod length xs). *)
-Admitted.
-
-Lemma repeat_rotate {X} (xs:list X) n m:
-  concat (repeat (rotate m xs) (S n)) =
-  (drop (m mod length xs) xs) ++ concat(repeat xs n) ++ (take (m mod length xs) xs).
-Proof.
-  induction n in m,xs |- *.
-  - cbn. rewrite app_nil_r rotate_alt.
-    reflexivity.
-  -   
-    remember (S n) as n0.
-    cbn.
-    rewrite IHn.
-    rewrite rotate_alt.
-    unfold rotate2.
-    rewrite <- app_assoc.
-    f_equal.
-    rewrite app_assoc.
-    rewrite firstn_skipn.
-    subst n0.
-    cbn.
-    now rewrite <- app_assoc.
-Qed.
-
-Lemma rotate_0 {X} (xs:list X):
-  rotate 0 xs = xs.
-Proof.
-  now destruct xs;cbn.
-Qed.
-
 Lemma prepend_app {X} (xs ys:list X) s:
   prependListStream (xs++ys) s =
   prependListStream (xs) (prependListStream ys s).
@@ -256,21 +141,6 @@ Proof.
   induction xs;cbn.
   - reflexivity.
   - now rewrite IHxs.
-Qed.
-
-Lemma local_mod_add n m c:
-  m <> 0 ->
-  n mod m = c ->
-  forall k,
-  k+c<m ->
-  (k+n) mod m = (k+c).
-Proof.
-  intros.
-  rewrite add_mod;[assumption|].
-  rewrite H0.
-  setoid_rewrite mod_small at 2. 2: lia.
-  rewrite mod_small. 2: lia.
-  assumption.
 Qed.
 
 Lemma prepend_list_ne_list X (xs:list X) H S:
