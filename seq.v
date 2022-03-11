@@ -260,6 +260,7 @@ Proof.
   exact H.
 Defined.
 
+
 Lemma seq_eq_k n k:
   k < 15 ->
   (S n) mod 15 = k ->
@@ -352,7 +353,6 @@ Proof.
       apply IH.
 Defined.
 
-
 Lemma seq_eq_large_step n:
   S n mod 15 = 1 ->
   EqSt (concat_list n_to_ne_seq (15 + n)) seq ->
@@ -409,6 +409,12 @@ Proof.
   apply CIH.
 Defined.
 
+Unset Guard Checking.
+
+(* we will apply the cofix to "concat_list _ n+15" 
+  so it is okay but Coq does not know it
+*)
+
 Lemma seq_eq n:
   S n mod 15 = 1 ->
   EqSt (concat_list n_to_ne_seq n) seq.
@@ -420,79 +426,12 @@ Proof.
   apply seq_eq_large_step.
   1: apply H.
   apply CIH.
+
   change (S (15+n)) with (15+(S n)).
   assert(15<>0) as H0 by congruence.
   rewrite (add_mod _ _ _ H0) H.
   now rewrite (mod_same _ H0).
 Qed.
-
-Unset Guard Checking.
-
-(* we will apply the cofix to "concat_list _ n+15" 
-  so it is okay but Coq does not know it
-*)
-Lemma seq_eq n:
-  S n mod 15 = 1 ->
-  EqSt (concat_list n_to_ne_seq n) seq.
-Proof.
-  revert n.
-  cofix CIH.
-  intros n Hn.
-
-  assert(15<>0) as H0 by lia.
-  pose proof (@local_mod_add (S n) 15 1 H0 Hn) as Hmod.
-
-  pose proof (@seq_eq_k n 1) as Hk.
-  rewrite prependPeriodSeq in Hk.
-  apply Hk;[lia|auto|].
-  clear Hk.
-
-  do 13 (apply seq_eq_k;[lia|shelve|]).
-  Unshelve.
-  shelve.
-  - apply (Hmod 1);lia.
-  - apply (Hmod 2);lia.
-  - apply (Hmod 3);lia.
-  - apply (Hmod 4);lia.
-  - apply (Hmod 5);lia.
-  - apply (Hmod 6);lia.
-  - apply (Hmod 7);lia.
-  - apply (Hmod 8);lia.
-  - apply (Hmod 9);lia.
-  - apply (Hmod 10);lia.
-  - apply (Hmod 11);lia.
-  - apply (Hmod 12);lia.
-  - apply (Hmod 13);lia.
-  Unshelve.
-
-  match goal with 
-  | [ |- context G[concat_list _ ?N] ] =>
-  replace N with (14+n) by reflexivity
-  end.
-  remember (14+n) as m.
-  vm_compute (_ mod _).
-  cbn [drop].
-  rewrite prependPeriodSeq.
-  
-  pose proof (@seq_eq_k m 0) as Hk.
-  rewrite prependPeriodSeq in Hk.
-  apply Hk;[lia| | ].
-  1: {
-    subst. 
-    change (S (14+n)) with (14+S n).
-    rewrite (add_mod _ _ _ H0) Hn.
-    setoid_rewrite mod_small at 2;[|lia].
-    now rewrite (mod_same _ H0).
-  }
-  clear Hk.
-
-  apply CIH.
-  subst.
-  change (S(S (14+n))) with (15+S n).
-  now rewrite (add_mod _ _ _ H0) (mod_same _ H0) (mod_mod _ _ H0);cbn [add].
-Qed.
-
-
 
 Set Guard Checking.
 

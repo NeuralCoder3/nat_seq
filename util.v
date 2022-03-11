@@ -55,6 +55,16 @@ Proof.
     now rewrite <- app_assoc.
 Qed.
 
+Lemma repeat_sum xs n :
+  sum (concat (repeat xs n)) = n * sum xs.
+Proof.
+  induction n;cbn.
+  - reflexivity.
+  - now rewrite sum_app IHn.
+Qed.
+
+
+
 
 
 
@@ -84,3 +94,4 @@ Proof.
   rewrite mod_small. 2: lia.
   assumption.
 Qed.
+
